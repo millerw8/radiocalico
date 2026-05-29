@@ -1,7 +1,7 @@
 # Makefile for Radio Calico Docker Management
 # Provides convenient shortcuts for common Docker operations
 
-.PHONY: help dev prod test start-dev start-prod start-test stop-dev stop-prod stop-test build-dev build-prod up-dev up-prod down logs logs-dev logs-prod test-run clean backup status
+.PHONY: help dev prod test start-dev start-prod start-test stop-dev stop-prod stop-test build-dev build-prod up-dev up-prod down logs logs-dev logs-prod test-run clean backup status security audit
 
 # Default target
 help:
@@ -35,6 +35,12 @@ help:
 	@echo "  make test         - Run all tests"
 	@echo "  make test-watch   - Run tests in watch mode"
 	@echo "  make test-coverage - Run tests with coverage report"
+	@echo ""
+	@echo "Security:"
+	@echo "  make security     - Run security audit (npm audit)"
+	@echo "  make audit        - Alias for 'make security'"
+	@echo "  make audit-fix    - Automatically fix security issues"
+	@echo "  make audit-report - Generate JSON security report"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  make status       - Show container status"
@@ -152,6 +158,35 @@ test-docker:
 test-docker-coverage:
 	@echo "Running tests with coverage in container..."
 	docker compose exec radiocalico-dev npm run test:coverage
+
+# Security targets
+security:
+	@echo "Running security audit..."
+	@echo ""
+	@npm audit --audit-level=moderate || true
+	@echo ""
+	@echo "💡 Tip: Run 'make audit-fix' to automatically fix issues"
+	@echo "💡 Tip: Run 'make audit-report' to generate JSON report"
+
+audit: security
+
+audit-fix:
+	@echo "Attempting to fix security vulnerabilities..."
+	@npm audit fix
+	@echo ""
+	@echo "✅ Security fixes applied"
+	@echo "💡 Run 'make security' to verify"
+
+audit-report:
+	@echo "Generating security audit report..."
+	@npm audit --json > audit-report.json 2>&1 || true
+	@echo ""
+	@echo "✅ Audit report saved to audit-report.json"
+	@echo "📊 View with: cat audit-report.json | jq"
+
+security-docker:
+	@echo "Running security audit in development container..."
+	docker compose exec radiocalico-dev npm audit --audit-level=moderate
 
 # Status and monitoring
 status:
