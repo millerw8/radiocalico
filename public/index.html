@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Radio Calico - Live Radio & User Management</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+<body>
+    <header class="page-header">
+        <div class="header-center">
+            <h1 class="site-title-part">Radio</h1>
+            <img src="/logo.png" alt="Radio Calico Logo" class="logo">
+            <h1 class="site-title-part">Calico</h1>
+        </div>
+        <a href="/users.html" class="nav-link">Manage Users</a>
+    </header>
+
+    <div class="main-content">
+        <div class="player-layout">
+            <div class="album-art-section">
+                <div class="album-art-card">
+                    <img src="https://d3d4yli4hf5bmh.cloudfront.net/cover.jpg" alt="Album Art" class="album-art" id="mainAlbumArt" onerror="this.style.display='none'">
+                </div>
+            </div>
+
+            <div class="right-content">
+                <div class="card track-metadata-section">
+                    <div id="trackMetadata">
+                        <div class="empty-state">Start playing to see track info</div>
+                    </div>
+
+                    <div class="player-controls-section">
+                        <div class="player-widget">
+                            <button class="play-button" id="playButton">▶</button>
+                            <div class="time-display">
+                                <div class="elapsed-time" id="elapsedTime">0:00</div>
+                                <div class="song-progress">
+                                    <div class="song-progress-bar" id="progressBar"></div>
+                                </div>
+                                <div class="remaining-time" id="remainingTime">-0:00</div>
+                            </div>
+                            <div class="volume-control">
+                                <span class="volume-icon">🔊</span>
+                                <input type="range" min="0" max="100" value="70" class="volume-slider" id="volumeSlider">
+                            </div>
+                        </div>
+
+                        <div class="radio-status" id="radioStatus">Click play to start streaming</div>
+
+                        <audio id="audioPlayer" preload="none"></audio>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="page-footer">
+            <div class="footer-section">
+                <h2>🕐 Recently Played</h2>
+                <div id="recentlyPlayedWidget">
+                    <div class="empty-state">No recent tracks yet</div>
+                </div>
+            </div>
+
+            <div class="footer-section">
+                <div class="user-login-section" id="userLoginSection">
+                    <h3>👤 Listener Account</h3>
+                    <div id="loginContainer">
+                        <div class="user-select-container">
+                            <select class="user-select" id="userSelect">
+                                <option value="">Select your account...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="loggedInContainer" style="display: none;">
+                        <span class="current-user" id="currentUserDisplay"></span>
+                        <button class="logout-btn" onclick="logoutUser()">Logout</button>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Radio Calico - Live Stream</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .player-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .controls {
+            margin: 30px 0;
+        }
+
+        .play-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            font-size: 2em;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .play-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        .play-button:active {
+            transform: scale(0.95);
+        }
+
+        .volume-control {
+            margin: 30px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+        }
+
+        .volume-icon {
+            font-size: 1.5em;
+            color: #667eea;
+        }
+
+        .volume-slider {
+            width: 200px;
+            height: 6px;
+            border-radius: 3px;
+            background: #ddd;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+        }
+
+        .volume-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: none;
+        }
+
+        .status {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 20px;
+            min-height: 20px;
+        }
+
+        .status.playing {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .status.error {
+            color: #e74c3c;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+</head>
+<body>
+    <div class="player-container">
+        <h1>Radio Calico</h1>
+        <p class="subtitle">Lossless HLS Stream</p>
+
+        <div class="controls">
+            <button class="play-button" id="playButton">▶</button>
+        </div>
+
+        <div class="volume-control">
+            <span class="volume-icon">🔊</span>
+            <input type="range" min="0" max="100" value="70" class="volume-slider" id="volumeSlider">
+        </div>
+
+        <div class="status" id="status">Click play to start streaming</div>
+
+        <audio id="audioPlayer" preload="none"></audio>
+    </div>
+
+    <script>
+        const audioPlayer = document.getElementById('audioPlayer');
+        const playButton = document.getElementById('playButton');
+        const volumeSlider = document.getElementById('volumeSlider');
+        const status = document.getElementById('status');
+        const streamUrl = 'https://d3d4yli4hf5bmh.cloudfront.net/hls/live.m3u8';
+
+        let isPlaying = false;
+        let hls = null;
+
+        audioPlayer.volume = volumeSlider.value / 100;
+
+        function initializePlayer() {
+            if (Hls.isSupported()) {
+                hls = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                    backBufferLength: 90
+                });
+
+                hls.loadSource(streamUrl);
+                hls.attachMedia(audioPlayer);
+
+                hls.on(Hls.Events.MANIFEST_PARSED, function() {
+                    console.log('HLS manifest loaded');
+                });
+
+                hls.on(Hls.Events.ERROR, function(event, data) {
+                    console.error('HLS error:', data);
+                    if (data.fatal) {
+                        status.textContent = 'Stream error. Retrying...';
+                        status.className = 'status error';
+                        setTimeout(() => {
+                            if (hls) {
+                                hls.destroy();
+                            }
+                            initializePlayer();
+                            if (isPlaying) {
+                                audioPlayer.play();
+                            }
+                        }, 3000);
+                    }
+                });
+            } else if (audioPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+                audioPlayer.src = streamUrl;
+            } else {
+                status.textContent = 'HLS not supported in this browser';
+                status.className = 'status error';
+            }
+        }
+
+        playButton.addEventListener('click', function() {
+            if (!hls && !audioPlayer.src) {
+                initializePlayer();
+            }
+
+            if (isPlaying) {
+                audioPlayer.pause();
+                playButton.textContent = '▶';
+                status.textContent = 'Paused';
+                status.className = 'status';
+                isPlaying = false;
+            } else {
+                audioPlayer.play().then(() => {
+                    playButton.textContent = '⏸';
+                    status.textContent = 'Now Playing';
+                    status.className = 'status playing';
+                    isPlaying = true;
+                }).catch(error => {
+                    console.error('Playback error:', error);
+                    status.textContent = 'Playback failed. Please try again.';
+                    status.className = 'status error';
+                });
+            }
+        });
+
+        volumeSlider.addEventListener('input', function() {
+            audioPlayer.volume = this.value / 100;
+        });
+
+        audioPlayer.addEventListener('waiting', function() {
+            status.textContent = 'Buffering...';
+            status.className = 'status';
+        });
+
+        audioPlayer.addEventListener('playing', function() {
+            status.textContent = 'Now Playing';
+            status.className = 'status playing';
+        });
+
+        audioPlayer.addEventListener('pause', function() {
+            if (isPlaying) {
+                status.textContent = 'Paused';
+                status.className = 'status';
+            }
+        });
+    </script>
+</body>
+</html>

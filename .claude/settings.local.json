@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sed 's/^        //' /Users/wmiller/code/radiocalico/public/app.js)",
+      "Bash(mv /tmp/app_clean.js /Users/wmiller/code/radiocalico/public/app.js)"
+    ]
+  }
+}
