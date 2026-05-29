@@ -53,3 +53,32 @@ jobs:
         else
           echo "✅ No critical vulnerabilities found"
         fi
+
+    - name: Install Trivy
+      run: |
+        wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | sudo apt-key add -
+        echo "deb https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -sc) main" | sudo tee -a /etc/apt/sources.list.d/trivy.list
+        sudo apt-get update
+        sudo apt-get install trivy
+
+    - name: Build Docker images
+      run: |
+        docker compose build radiocalico-prod
+
+    - name: Scan Docker images with Trivy
+      run: |
+        echo "Scanning production image..."
+        trivy image --severity HIGH,CRITICAL --format json --output trivy-prod-${{ matrix.node-version }}.json radiocalico-radiocalico-prod:latest
+        trivy image --severity HIGH,CRITICAL radiocalico-radiocalico-prod:latest
+
+        echo "Scanning base images..."
+        trivy image --severity HIGH,CRITICAL postgres:16-alpine
+        trivy image --severity HIGH,CRITICAL nginx:alpine
+      continue-on-error: true
+
+    - name: Upload Trivy report
+      uses: actions/upload-artifact@v3
+      with:
+        name: trivy-report-${{ matrix.node-version }}
+        path: trivy-prod-${{ matrix.node-version }}.json
+        retention-days: 30

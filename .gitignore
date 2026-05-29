@@ -17,3 +17,4 @@ backups/
 
 # Security reports
 audit-report*.json
+security-reports/

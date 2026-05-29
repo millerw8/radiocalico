@@ -133,6 +133,52 @@ else
 fi
 echo ""
 
+# 11. Run Trivy container scans (if available)
+echo "1️⃣1️⃣  Scanning Docker images with Trivy..."
+if command -v trivy &> /dev/null; then
+    TRIVY_ISSUES=false
+
+    # Check if images exist before scanning
+    if docker images | grep -q 'radiocalico-radiocalico-prod'; then
+        echo "   Scanning production image..."
+        if trivy image --severity HIGH,CRITICAL --exit-code 1 radiocalico-radiocalico-prod:latest 2>&1 | grep -q 'Total: 0'; then
+            echo -e "   ${GREEN}✅ Production image: No HIGH/CRITICAL vulnerabilities${NC}"
+        else
+            echo -e "   ${RED}⚠️  Production image: Vulnerabilities found${NC}"
+            trivy image --severity HIGH,CRITICAL radiocalico-radiocalico-prod:latest 2>&1 | tail -20
+            TRIVY_ISSUES=true
+            ISSUES=$((ISSUES+1))
+        fi
+    else
+        echo -e "   ${YELLOW}ℹ️  Production image not built yet${NC}"
+    fi
+
+    # Scan base images
+    echo "   Scanning base images..."
+    if trivy image --severity HIGH,CRITICAL postgres:16-alpine 2>&1 | grep -q 'Total: 0'; then
+        echo -e "   ${GREEN}✅ postgres:16-alpine: No HIGH/CRITICAL vulnerabilities${NC}"
+    else
+        echo -e "   ${YELLOW}⚠️  postgres:16-alpine: Vulnerabilities found${NC}"
+        TRIVY_ISSUES=true
+    fi
+
+    if trivy image --severity HIGH,CRITICAL nginx:alpine 2>&1 | grep -q 'Total: 0'; then
+        echo -e "   ${GREEN}✅ nginx:alpine: No HIGH/CRITICAL vulnerabilities${NC}"
+    else
+        echo -e "   ${YELLOW}⚠️  nginx:alpine: Vulnerabilities found${NC}"
+        TRIVY_ISSUES=true
+    fi
+
+    if [ "$TRIVY_ISSUES" = false ]; then
+        echo -e "${GREEN}✅ All container images clean${NC}"
+    fi
+else
+    echo -e "${YELLOW}⚠️  Trivy not installed${NC}"
+    echo "   Install: brew install aquasecurity/trivy/trivy"
+    echo "   Or: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin"
+fi
+echo ""
+
 # Summary
 echo "================================"
 if [ $ISSUES -eq 0 ]; then

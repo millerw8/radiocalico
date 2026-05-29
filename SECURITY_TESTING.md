@@ -43,6 +43,7 @@ make audit-fix       # Auto-fix npm vulnerabilities
 8. **HTTPS Configuration** - Verifies SSL/TLS setup
 9. **npm Audit** - Runs dependency scan
 10. **Rate Limiting** - Checks for rate limiting configuration
+11. **Container Scanning (Trivy)** - Scans Docker images for OS and library vulnerabilities
 
 ## What's NOT Tested
 
@@ -57,8 +58,8 @@ The current tools don't cover:
 - **API Security** - Manual testing required
 
 ### Infrastructure Security
-- **Container Scanning** - Use tools like Trivy or Snyk
-- **Image Vulnerabilities** - Use Docker Scout or Clair
+- **Container Scanning** - ✅ Now integrated with Trivy in `make security`
+- **Image Vulnerabilities** - ✅ Covered by Trivy scans
 - **Network Security** - Use network scanners
 - **Firewall Rules** - Manual review required
 - **TLS Configuration** - Use SSL Labs or testssl.sh
@@ -71,17 +72,25 @@ The current tools don't cover:
 
 ## Recommended Additional Tools
 
-### 1. Container Security Scanning
+### 1. Container Security Scanning (Trivy) - NOW INTEGRATED ✅
 
 ```bash
-# Install Trivy
-brew install aquasecurity/trivy/trivy
+# Install Trivy (one-time setup)
+make trivy-install
 
-# Scan Docker images
+# Scan Docker images (included in 'make security')
+make trivy-scan
+
+# Generate detailed reports
+make trivy-report
+
+# Manual scans
 trivy image radiocalico-radiocalico-prod:latest
 trivy image postgres:16-alpine
 trivy image nginx:alpine
 ```
+
+**Note:** Container scanning is now automatically included in `make security`
 
 ### 2. Static Application Security Testing (SAST)
 

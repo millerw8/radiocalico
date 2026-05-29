@@ -37,11 +37,14 @@ help:
 	@echo "  make test-coverage - Run tests with coverage report"
 	@echo ""
 	@echo "Security:"
-	@echo "  make security     - Run comprehensive security checks"
+	@echo "  make security     - Run comprehensive security checks (includes Trivy)"
 	@echo "  make security-quick - Run quick npm audit only"
 	@echo "  make audit        - Alias for 'make security-quick'"
 	@echo "  make audit-fix    - Automatically fix security issues"
 	@echo "  make audit-report - Generate JSON security report"
+	@echo "  make trivy-scan   - Scan Docker images with Trivy"
+	@echo "  make trivy-install - Install Trivy scanner"
+	@echo "  make trivy-report - Generate Trivy JSON reports"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  make status       - Show container status"
@@ -193,6 +196,41 @@ audit-report:
 security-docker:
 	@echo "Running security audit in development container..."
 	docker compose exec radiocalico-dev npm audit --audit-level=moderate
+
+# Trivy container scanning
+trivy-install:
+	@echo "Installing Trivy..."
+	@if command -v brew >/dev/null 2>&1; then \
+		brew install aquasecurity/trivy/trivy; \
+	else \
+		curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin; \
+	fi
+	@echo "✅ Trivy installed"
+
+trivy-scan:
+	@echo "Scanning Docker images with Trivy..."
+	@echo ""
+	@if ! command -v trivy >/dev/null 2>&1; then \
+		echo "⚠️  Trivy not installed. Run 'make trivy-install' first."; \
+		exit 1; \
+	fi
+	@echo "Scanning production image..."
+	@trivy image --severity HIGH,CRITICAL radiocalico-radiocalico-prod:latest || true
+	@echo ""
+	@echo "Scanning base images..."
+	@trivy image --severity HIGH,CRITICAL postgres:16-alpine || true
+	@trivy image --severity HIGH,CRITICAL nginx:alpine || true
+	@echo ""
+	@echo "✅ Trivy scan complete"
+
+trivy-report:
+	@echo "Generating Trivy security reports..."
+	@mkdir -p security-reports
+	@trivy image --format json --output security-reports/trivy-prod.json radiocalico-radiocalico-prod:latest 2>/dev/null || true
+	@trivy image --format json --output security-reports/trivy-postgres.json postgres:16-alpine 2>/dev/null || true
+	@trivy image --format json --output security-reports/trivy-nginx.json nginx:alpine 2>/dev/null || true
+	@echo "✅ Reports saved to security-reports/"
+	@echo "📊 View with: cat security-reports/trivy-prod.json | jq"
 
 # Status and monitoring
 status:
