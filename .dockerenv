@@ -1,0 +1,18 @@
+# Docker Environment Configuration
+# This file documents the Docker environment setup for Radio Calico
+
+# Container Names
+DEV_CONTAINER=radiocalico-dev
+PROD_CONTAINER=radiocalico-prod
+
+# Ports
+DEV_PORT=3000
+PROD_PORT=3001
+
+# Volumes
+DEV_VOLUME=radiocalico-dev-db
+PROD_VOLUME=radiocalico-prod-db
+
+# Images
+DEV_IMAGE=radiocalico:dev
+PROD_IMAGE=radiocalico:prod

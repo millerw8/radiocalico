@@ -1,0 +1,113 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database for development
+  postgres-dev:
+    image: postgres:16-alpine
+    container_name: radiocalico-postgres-dev
+    environment:
+      POSTGRES_USER: radiocalico
+      POSTGRES_PASSWORD: radiocalico
+      POSTGRES_DB: radiocalico
+    ports:
+      - "5434:5432"
+    volumes:
+      - radiocalico-dev-db:/var/lib/postgresql/data
+    networks:
+      - radiocalico-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U radiocalico"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Development service
+  radiocalico-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: radiocalico-dev
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount source code for hot-reloading
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./tests:/app/tests
+      # Prevent node_modules from being overwritten
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DB_HOST=postgres-dev
+      - DB_PORT=5432
+      - DB_NAME=radiocalico
+      - DB_USER=radiocalico
+      - DB_PASSWORD=radiocalico
+    depends_on:
+      postgres-dev:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - radiocalico-network
+
+  # PostgreSQL database for production
+  postgres-prod:
+    image: postgres:16-alpine
+    container_name: radiocalico-postgres-prod
+    environment:
+      POSTGRES_USER: radiocalico
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-radiocalico_prod_password}
+      POSTGRES_DB: radiocalico
+    ports:
+      - "5433:5432"
+    volumes:
+      - radiocalico-prod-db:/var/lib/postgresql/data
+    networks:
+      - radiocalico-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U radiocalico"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Production service
+  radiocalico-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: radiocalico-prod
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_HOST=postgres-prod
+      - DB_PORT=5432
+      - DB_NAME=radiocalico
+      - DB_USER=radiocalico
+      - DB_PASSWORD=${DB_PASSWORD:-radiocalico_prod_password}
+    depends_on:
+      postgres-prod:
+        condition: service_healthy
+    restart: always
+    networks:
+      - radiocalico-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  radiocalico-dev-db:
+    driver: local
+  radiocalico-prod-db:
+    driver: local
+
+networks:
+  radiocalico-network:
+    driver: bridge

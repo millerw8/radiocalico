@@ -93,6 +93,8 @@ Radio Calico is a web-based internet radio streaming application that plays loss
 
 ## Development Commands
 
+### Local Development
+
 ```bash
 # Start the server (production mode)
 npm start
@@ -117,6 +119,38 @@ npm run test:backend
 # Run only frontend tests
 npm run test:frontend
 ```
+
+### Docker Development
+
+```bash
+# Development mode (with hot-reloading)
+make dev                    # Build and start dev container with logs
+docker compose up -d radiocalico-dev  # Or start directly
+
+# Production mode
+make prod                   # Build and start prod container
+docker compose -f docker compose.prod.yml up -d  # Or start directly
+
+# View logs
+make logs-dev              # Development logs
+make logs-prod             # Production logs
+
+# Run tests in container
+make test                  # Run all tests
+make test-coverage         # Run with coverage
+
+# Stop containers
+make down                  # Stop all containers
+
+# Backup database
+make backup                # Backup production database
+
+# Clean up
+make clean                 # Remove containers and images
+make clean-all             # Remove everything including volumes
+```
+
+See [DOCKER.md](DOCKER.md) for complete Docker documentation.
 
 ## API Endpoints
 

@@ -1,0 +1,72 @@
+# Production-only docker compose configuration
+# Usage: docker compose -f docker compose.prod.yml up -d
+
+version: '3.8'
+
+services:
+  # PostgreSQL database for production
+  postgres:
+    image: postgres:16-alpine
+    container_name: radiocalico-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-radiocalico}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-radiocalico_prod_password}
+      POSTGRES_DB: ${DB_NAME:-radiocalico}
+    volumes:
+      - radiocalico-db:/var/lib/postgresql/data
+    networks:
+      - radiocalico-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-radiocalico}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # Production application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: radiocalico-app
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=${DB_NAME:-radiocalico}
+      - DB_USER=${DB_USER:-radiocalico}
+      - DB_PASSWORD=${DB_PASSWORD:-radiocalico_prod_password}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: always
+    networks:
+      - radiocalico-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  radiocalico-db:
+    driver: local
+
+networks:
+  radiocalico-network:
+    driver: bridge

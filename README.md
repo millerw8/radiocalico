@@ -29,10 +29,32 @@ A web-based internet radio streaming application that plays lossless HLS audio s
 
 ### Prerequisites
 
-- Node.js (v14 or higher)
-- npm
+- **Option 1 (Docker)**: Docker and Docker Compose
+- **Option 2 (Local)**: Node.js (v14 or higher) and npm
 
 ### Installation
+
+#### Using Docker (Recommended)
+
+```bash
+# Clone the repository
+git clone https://github.com/millerw8/radiocalico.git
+cd radiocalico
+
+# Development mode (with hot-reloading)
+make dev
+
+# Or production mode
+make prod
+```
+
+The application will be available at:
+- Development: `http://localhost:3000`
+- Production: `http://localhost:3000` (or 3001 if using docker compose.yml)
+
+For complete Docker documentation, see [DOCKER.md](DOCKER.md).
+
+#### Local Installation
 
 ```bash
 # Clone the repository
@@ -50,6 +72,14 @@ The application will be available at `http://localhost:3000`
 
 ### Development Mode
 
+**Docker**:
+```bash
+make dev              # Build and start with logs
+# Or
+docker compose up -d radiocalico-dev
+```
+
+**Local**:
 ```bash
 # Start with auto-reload on file changes
 npm run dev
