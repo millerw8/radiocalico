@@ -5,10 +5,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 Radio Calico is a web-based internet radio streaming application that plays lossless HLS audio streams. The application consists of:
-- An Express.js backend server with SQLite database
+- An Express.js backend server with PostgreSQL database
 - A frontend web player with HLS streaming support
 - Real-time metadata display for now-playing information
 - Song rating system (thumbs up/down)
+- Comprehensive test suite (23 tests)
+- CI/CD pipeline with automated testing and security scanning
+- Docker support for development and production
 
 ## File Structure
 
@@ -16,8 +19,8 @@ Radio Calico is a web-based internet radio streaming application that plays loss
 .
 ├── src/
 │   ├── server.js           # Express server with REST API endpoints
-│   └── database.js         # SQLite database initialization and schema
-├── public/                 # Static files served by Express
+│   └── database.js         # PostgreSQL database initialization and schema
+├── public/                 # Static files served by Express/nginx
 │   ├── index.html          # Full-featured player HTML (90 lines - structure only)
 │   ├── styles.css          # All CSS styling (682 lines)
 │   ├── app.js              # All JavaScript logic (417 lines)
@@ -25,23 +28,31 @@ Radio Calico is a web-based internet radio streaming application that plays loss
 │   └── logo.png            # Radio Calico logo
 ├── tests/                  # Test suite (Jest + Supertest + jsdom)
 │   ├── backend/
-│   │   └── ratings.test.js # Backend API tests (12 tests)
+│   │   └── ratings.test.js # Backend API tests (12 tests) - PostgreSQL
 │   ├── frontend/
 │   │   ├── setup.js        # Frontend test environment setup
 │   │   └── ratings-ui.test.js # Frontend UI tests (11 tests)
-│   ├── fixtures/           # Test data and temporary test databases
+│   ├── fixtures/           # Test data
 │   └── README.md           # Detailed testing documentation
 ├── .github/
 │   └── workflows/
-│       └── test.yml        # CI/CD test automation
-├── database/
-│   └── app.db              # SQLite database (auto-created)
+│       └── ci.yml          # CI/CD pipeline (tests + security + Docker)
+├── scripts/
+│   ├── setup-test-db.sh    # Test database initialization
+│   └── security-check.sh   # Comprehensive security scanning
+├── docker-compose.yml      # Docker Compose configuration
+├── Dockerfile              # Multi-stage Docker build
+├── nginx.conf              # nginx reverse proxy configuration
+├── Makefile                # Convenient Docker and test commands
 ├── index.html              # Simple standalone HLS player (root)
 ├── jest.config.js          # Jest test framework configuration
 ├── package.json            # Node.js dependencies and scripts
-├── .env                    # Environment configuration (PORT, DATABASE_PATH)
+├── .env                    # Environment configuration
+├── .env.test               # Test environment configuration
 ├── README.md               # Project documentation
+├── DOCKER.md               # Docker setup and usage guide
 ├── TESTING.md              # Testing framework overview
+├── PERFORMANCE_OPTIMIZATION.md # Page speed optimization guide
 ├── TEST_SUMMARY.md         # Quick testing summary
 ├── GETTING_STARTED_WITH_TESTS.md # Testing quick start guide
 ├── stream_URL.txt          # HLS stream URL reference
@@ -55,9 +66,9 @@ Radio Calico is a web-based internet radio streaming application that plays loss
 
 ### Backend (Node.js/Express)
 - **Entry point**: `src/server.js` - Express server with REST API endpoints
-- **Database**: `src/database.js` - SQLite database setup using better-sqlite3
-- **Database location**: `./database/app.db` (auto-created on first run)
-- **Environment config**: `.env` file for PORT and DATABASE_PATH
+- **Database**: `src/database.js` - PostgreSQL database setup using node-postgres (pg)
+- **Database**: PostgreSQL 16 with connection pooling
+- **Environment config**: `.env` file for PORT, DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD
 
 ### Frontend
 - **Main player**: `public/index.html` - Full-featured player HTML structure (90 lines)
@@ -73,25 +84,52 @@ Radio Calico is a web-based internet radio streaming application that plays loss
 - **User management**: `public/users.html` - User CRUD interface
 - **Static assets**: `public/logo.png` - Radio Calico logo
 
-### Database Schema
+### Database Schema (PostgreSQL)
 
 **users table**:
-- `id` (INTEGER PRIMARY KEY AUTOINCREMENT)
+- `id` (SERIAL PRIMARY KEY)
 - `username` (TEXT NOT NULL UNIQUE)
 - `email` (TEXT NOT NULL UNIQUE)
-- `created_at` (DATETIME DEFAULT CURRENT_TIMESTAMP)
+- `created_at` (TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
 
 **song_ratings table**:
-- `id` (INTEGER PRIMARY KEY AUTOINCREMENT)
+- `id` (SERIAL PRIMARY KEY)
 - `song_title` (TEXT NOT NULL)
 - `song_artist` (TEXT NOT NULL)
 - `user_id` (TEXT NOT NULL)
 - `rating` (INTEGER NOT NULL CHECK(rating IN (1, -1))) - 1 for thumbs up, -1 for thumbs down
-- `created_at` (DATETIME DEFAULT CURRENT_TIMESTAMP)
+- `created_at` (TIMESTAMP DEFAULT CURRENT_TIMESTAMP)
 - UNIQUE constraint on (song_title, song_artist, user_id)
 - Index on (song_title, song_artist)
 
 ## Development Commands
+
+### Docker Development (Recommended)
+
+```bash
+# Development mode (with hot-reloading)
+make dev
+
+# Production mode
+make prod
+
+# Run tests
+make test
+
+# Security scanning
+make security
+
+# View logs
+make logs-dev
+make logs-prod
+
+# Stop containers
+make stop-dev
+make stop-prod
+
+# Database backup
+make backup
+```
 
 ### Local Development
 
@@ -120,37 +158,23 @@ npm run test:backend
 npm run test:frontend
 ```
 
-### Docker Development
+### Testing
+
+**Prerequisites**: PostgreSQL must be running
 
 ```bash
-# Development mode (with hot-reloading)
-make dev                    # Build and start dev container with logs
-docker compose up -d radiocalico-dev  # Or start directly
+# Setup test database (one-time)
+make test-setup
 
-# Production mode
-make prod                   # Build and start prod container
-docker compose -f docker compose.prod.yml up -d  # Or start directly
+# Run all tests
+npm test
 
-# View logs
-make logs-dev              # Development logs
-make logs-prod             # Production logs
+# Run in watch mode
+npm run test:watch
 
-# Run tests in container
-make test                  # Run all tests
-make test-coverage         # Run with coverage
-
-# Stop containers
-make down                  # Stop all containers
-
-# Backup database
-make backup                # Backup production database
-
-# Clean up
-make clean                 # Remove containers and images
-make clean-all             # Remove everything including volumes
+# Run with coverage
+npm run test:coverage
 ```
-
-See [DOCKER.md](DOCKER.md) for complete Docker documentation.
 
 ## API Endpoints
 
@@ -176,6 +200,15 @@ See [DOCKER.md](DOCKER.md) for complete Docker documentation.
 The stream is lossless quality HLS audio served from CloudFront. The frontend uses hls.js for browser compatibility.
 
 ## Key Implementation Details
+
+### PostgreSQL Integration
+- Uses node-postgres (pg) with connection pooling
+- Async/await pattern for all database operations
+- Parameterized queries ($1, $2, etc.) for SQL injection prevention
+- Connection pool configuration:
+  - Max 10 connections for production
+  - Max 5 connections for tests
+  - Automatic connection management
 
 ### HLS Player Configuration
 - Uses hls.js library for HLS support in browsers
@@ -261,8 +294,9 @@ The project includes a comprehensive unit testing framework using Jest, Supertes
 - `tests/backend/ratings.test.js` - Backend API and database tests
   - Tests POST /rate-song endpoint (create, update, validation)
   - Tests GET /user-rating endpoint (retrieval, null handling)
-  - Uses real SQLite database (fresh per test)
+  - Uses real PostgreSQL database with connection pooling
   - Validates business logic and edge cases
+  - Async/await pattern throughout
 
 - `tests/frontend/ratings-ui.test.js` - Frontend UI and interaction tests
   - Tests rateSong function (validation, API calls, error handling)
@@ -286,10 +320,14 @@ npm run test:frontend    # Frontend tests only
 - **TEST_SUMMARY.md** - Summary of test coverage
 
 ### CI/CD Integration
-- GitHub Actions workflow at `.github/workflows/test.yml`
+- GitHub Actions workflow at `.github/workflows/ci.yml`
 - Runs on push to main/develop and on pull requests
 - Tests against Node.js 18.x and 20.x
+- PostgreSQL service container for backend tests
+- Security scanning with npm audit and Trivy
+- Docker build verification
 - Uploads coverage reports to Codecov
+- Daily scheduled security scans
 
 ### Test Dependencies
 - **jest** - Test framework
@@ -297,13 +335,96 @@ npm run test:frontend    # Frontend tests only
 - **supertest** - HTTP endpoint testing
 - **jest-environment-jsdom** - DOM manipulation in tests
 
+## Security
+
+### Automated Security Checks
+
+The project includes comprehensive security scanning:
+
+**Run locally:**
+```bash
+make security         # Comprehensive security check (11 checks)
+make security-quick   # Quick npm audit only
+make audit-fix        # Automatically fix vulnerabilities
+```
+
+**Security checks include:**
+1. Hardcoded secrets detection
+2. .env file in git check
+3. SQL injection pattern checking
+4. Default passwords in docker-compose
+5. nginx security headers
+6. Exposed ports check
+7. Docker user security
+8. HTTPS/TLS configuration
+9. npm audit
+10. Rate limiting check
+11. Trivy container scanning
+
+**CI/CD Security:**
+- Automated security scans on every push/PR
+- Daily scheduled scans at 2 AM UTC
+- Results uploaded to GitHub Security tab
+- SARIF format for vulnerability tracking
+- Dependency review on pull requests
+
+## Performance Optimization
+
+See **PERFORMANCE_OPTIMIZATION.md** for comprehensive page speed optimization guide.
+
+**Current Performance:**
+- Total Initial Load: ~280-300 KB (uncompressed)
+- First Contentful Paint: ~1.5s
+- Lighthouse Score: ~75
+
+**Optimization Potential:**
+- 47% faster First Contentful Paint (1.5s → 0.8s)
+- 40% smaller bundle size (300 KB → 180 KB)
+- +20 points Lighthouse score (75 → 95+)
+
+**Quick wins (1-2 hours for 30-40% improvement):**
+1. Optimize logo image (save 44 KB)
+2. Add defer to scripts
+3. Lazy load images
+4. Add resource hints
+5. Update cache headers
+
+## Docker Support
+
+### Development Environment
+- Hot-reloading with volume mounts
+- PostgreSQL on port 5434
+- Application on port 3000
+- Logs visible with `make logs-dev`
+
+### Production Environment
+- Multi-stage Docker build
+- nginx reverse proxy on port 80
+- PostgreSQL on port 5433
+- Health checks enabled
+- Optimized for production
+
+### Docker Commands
+```bash
+make dev              # Start development
+make prod             # Start production
+make logs-dev         # View dev logs
+make logs-prod        # View prod logs
+make backup           # Backup production database
+make clean            # Remove containers
+```
+
+See **DOCKER.md** for complete Docker documentation.
+
 ## Important Notes
 
-- The database is auto-created on first server start
-- better-sqlite3 is used for synchronous database operations (no async/await needed for queries)
+- The database is PostgreSQL (not SQLite) - use async/await and parameterized queries
 - Express 5.x is used (note: some middleware may need updates from Express 4.x patterns)
 - Static files are served from the `public/` directory
 - The root `index.html` is a simpler standalone player; `public/index.html` is the full-featured version
 - All CSS and JavaScript are in separate files - avoid adding inline styles or scripts to HTML files
 - **Always run tests before committing**: `npm test` (all 23 tests should pass)
 - **Use watch mode during development**: `npm run test:watch` for auto-rerun on file changes
+- **Run security checks**: `make security` before deploying
+- **Database connection pooling**: Use the existing pool, don't create new connections
+- **Environment variables**: Load from .env for local, from Docker environment in containers

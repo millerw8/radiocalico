@@ -1,8 +1,10 @@
 # Radio Calico
 
 [![GitHub](https://img.shields.io/badge/GitHub-millerw8%2Fradiocalico-blue)](https://github.com/millerw8/radiocalico)
+[![CI/CD Pipeline](https://img.shields.io/badge/CI%2FCD-passing-brightgreen)](https://github.com/millerw8/radiocalico/actions)
 [![Tests](https://img.shields.io/badge/tests-23%20passing-brightgreen)](TESTING.md)
-[![Test Coverage](https://img.shields.io/badge/coverage-comprehensive-brightgreen)](tests/README.md)
+[![Security](https://img.shields.io/badge/security-9%20checks-blue)](PERFORMANCE_OPTIMIZATION.md)
+[![Performance](https://img.shields.io/badge/lighthouse-optimization%20guide-yellow)](PERFORMANCE_OPTIMIZATION.md)
 
 A web-based internet radio streaming application that plays lossless HLS audio streams with real-time metadata display and song rating features.
 
@@ -12,25 +14,29 @@ A web-based internet radio streaming application that plays lossless HLS audio s
 
 - 🎵 **Lossless HLS Audio Streaming** - High-quality audio playback from CloudFront
 - 📻 **Real-time Metadata** - Live track information including artist, title, album, and technical details
-- 👍👎 **Song Rating System** - Thumbs up/down voting for tracks
+- 👍👎 **Song Rating System** - Thumbs up/down voting for tracks with PostgreSQL persistence
 - 👤 **User Management** - Create and manage listener accounts
 - 🕐 **Recently Played** - Track history of the last 5 songs
 - 🎨 **Brand Design** - Clean UI following Radio Calico style guidelines
 - ✅ **Comprehensive Testing** - 23 unit tests covering backend API and frontend UI
+- 🔒 **Security Scanning** - Automated vulnerability detection and code analysis
+- 🚀 **CI/CD Pipeline** - Automated testing, security scans, and Docker builds
 
 ## Tech Stack
 
-- **Backend**: Node.js, Express 5.x, SQLite (better-sqlite3)
+- **Backend**: Node.js, Express 5.x, PostgreSQL (node-postgres)
 - **Frontend**: Vanilla JavaScript, HLS.js for audio streaming
 - **Design**: Custom CSS with Montserrat & Open Sans fonts
 - **Testing**: Jest, Supertest, jsdom (23 tests, < 1s execution)
+- **Infrastructure**: Docker, Docker Compose, nginx
+- **CI/CD**: GitHub Actions with automated testing and security scanning
 
 ## Quick Start
 
 ### Prerequisites
 
-- **Option 1 (Docker)**: Docker and Docker Compose
-- **Option 2 (Local)**: Node.js (v14 or higher) and npm
+- **Option 1 (Docker - Recommended)**: Docker and Docker Compose
+- **Option 2 (Local)**: Node.js (v18 or v20) and PostgreSQL 16
 
 ### Installation
 
@@ -49,8 +55,8 @@ make prod
 ```
 
 The application will be available at:
-- Development: `http://localhost:3000`
-- Production: `http://localhost:3000` (or 3001 if using docker compose.yml)
+- **Development**: `http://localhost:3000`
+- **Production**: `http://localhost` (port 80)
 
 For complete Docker documentation, see [DOCKER.md](DOCKER.md).
 
@@ -63,6 +69,10 @@ cd radiocalico
 
 # Install dependencies
 npm install
+
+# Setup PostgreSQL database
+# Make sure PostgreSQL is running, then:
+make test-setup
 
 # Start the server
 npm start
@@ -106,13 +116,33 @@ npm run test:frontend
 
 For detailed testing documentation, see [TESTING.md](TESTING.md).
 
+### Security Scanning
+
+```bash
+# Run comprehensive security checks
+make security
+
+# Quick npm audit only
+make security-quick
+
+# Fix security issues automatically
+make audit-fix
+```
+
 ## Configuration
 
 Create a `.env` file in the root directory:
 
 ```env
 PORT=3000
-DATABASE_PATH=./database/app.db
+NODE_ENV=development
+
+# PostgreSQL Configuration
+DB_HOST=localhost
+DB_PORT=5434
+DB_NAME=radiocalico
+DB_USER=radiocalico
+DB_PASSWORD=radiocalico
 ```
 
 ## API Endpoints
@@ -126,6 +156,7 @@ DATABASE_PATH=./database/app.db
 ### Now Playing & Ratings
 - `GET /now-playing` - Fetch current track metadata
 - `POST /rate-song` - Submit song rating (body: `{title, artist, rating, userId}`)
+  - `rating` must be 1 (thumbs up) or -1 (thumbs down)
 - `GET /user-rating/:userId/:title/:artist` - Get user's rating for a song
 
 ## Project Structure
@@ -134,32 +165,39 @@ DATABASE_PATH=./database/app.db
 .
 ├── src/
 │   ├── server.js           # Express server with REST API endpoints
-│   └── database.js         # SQLite database initialization and schema
-├── public/                 # Static files served by Express
-│   ├── index.html          # Full-featured player HTML structure
+│   └── database.js         # PostgreSQL database initialization and schema
+├── public/                 # Static files served by Express/nginx
+│   ├── index.html          # Full-featured player HTML structure (90 lines)
 │   ├── styles.css          # All CSS styling (682 lines)
 │   ├── app.js              # All JavaScript logic (417 lines)
 │   ├── users.html          # User management interface
 │   └── logo.png            # Radio Calico logo
 ├── tests/                  # Test suite (Jest + Supertest + jsdom)
 │   ├── backend/
-│   │   └── ratings.test.js # Backend API tests (12 tests)
+│   │   └── ratings.test.js # Backend API tests (12 tests) - PostgreSQL
 │   ├── frontend/
 │   │   ├── setup.js        # Frontend test environment setup
 │   │   └── ratings-ui.test.js # Frontend UI tests (11 tests)
-│   ├── fixtures/           # Test data and temporary test databases
+│   ├── fixtures/           # Test data
 │   └── README.md           # Detailed testing documentation
 ├── .github/
 │   └── workflows/
-│       └── test.yml        # CI/CD test automation
-├── database/
-│   └── app.db              # SQLite database (auto-created)
-├── index.html              # Simple standalone HLS player (root)
+│       └── ci.yml          # CI/CD pipeline (tests + security + Docker)
+├── scripts/
+│   ├── setup-test-db.sh    # Test database initialization
+│   └── security-check.sh   # Comprehensive security scanning
+├── docker-compose.yml      # Docker Compose configuration
+├── Dockerfile              # Multi-stage Docker build
+├── nginx.conf              # nginx reverse proxy configuration
+├── Makefile                # Convenient Docker and test commands
 ├── jest.config.js          # Jest test framework configuration
 ├── package.json            # Node.js dependencies and scripts
 ├── .env                    # Environment configuration
+├── .env.test               # Test environment configuration
 ├── CLAUDE.md               # Development guidance for Claude Code
+├── DOCKER.md               # Docker setup and usage guide
 ├── TESTING.md              # Testing framework overview
+├── PERFORMANCE_OPTIMIZATION.md # Page speed optimization guide
 ├── TEST_SUMMARY.md         # Quick testing summary
 ├── GETTING_STARTED_WITH_TESTS.md # Testing quick start guide
 ├── README.md               # This file
@@ -168,20 +206,21 @@ DATABASE_PATH=./database/app.db
 
 ## Database Schema
 
-### users table
-- `id` - Primary key
-- `username` - Unique username
-- `email` - Unique email address
+### users table (PostgreSQL)
+- `id` - Serial primary key
+- `username` - Unique username (TEXT)
+- `email` - Unique email address (TEXT)
 - `created_at` - Timestamp
 
-### song_ratings table
-- `id` - Primary key
-- `song_title` - Track title
-- `song_artist` - Artist name
-- `user_id` - User identifier
-- `rating` - 1 (thumbs up) or -1 (thumbs down)
+### song_ratings table (PostgreSQL)
+- `id` - Serial primary key
+- `song_title` - Track title (TEXT)
+- `song_artist` - Artist name (TEXT)
+- `user_id` - User identifier (TEXT)
+- `rating` - INTEGER: 1 (thumbs up) or -1 (thumbs down)
 - `created_at` - Timestamp
 - Unique constraint on (song_title, song_artist, user_id)
+- Index on (song_title, song_artist)
 
 ## Testing the API
 
@@ -246,8 +285,9 @@ Radio Calico includes a comprehensive test suite with 23 unit tests:
 **Backend Tests** (`tests/backend/ratings.test.js`):
 - ✅ POST /rate-song endpoint (create, update, validation)
 - ✅ GET /user-rating endpoint (retrieval, null handling)
-- ✅ Real SQLite database testing (not mocked)
+- ✅ Real PostgreSQL database testing (not mocked)
 - ✅ Business logic and edge cases
+- ✅ Async/await with connection pooling
 
 **Frontend Tests** (`tests/frontend/ratings-ui.test.js`):
 - ✅ rateSong function (validation, API calls, error handling)
@@ -267,14 +307,24 @@ npm run test:frontend     # Frontend tests only
 
 **Test Execution**: All 23 tests run in < 1 second
 
-### CI/CD
+### CI/CD Pipeline
 
-Tests run automatically via GitHub Actions:
-- On every push to `main` or `develop`
-- On every pull request
-- Against Node.js 18.x and 20.x
+Automated testing and security scanning via GitHub Actions:
 
-See `.github/workflows/test.yml` for details.
+**On Every Push/PR:**
+- ✅ Unit tests on Node.js 18.x and 20.x
+- ✅ PostgreSQL service container for backend tests
+- ✅ Coverage report upload to Codecov
+- ✅ 9 security checks (npm audit, secrets, SQL injection, etc.)
+- ✅ Trivy vulnerability scanning (filesystem + containers)
+- ✅ Docker build verification
+- ✅ Dependency review on pull requests
+
+**Daily Scheduled:**
+- ✅ Full security scan at 2 AM UTC
+- ✅ Dependency updates check
+
+See `.github/workflows/ci.yml` for details.
 
 ### Documentation
 
@@ -283,14 +333,97 @@ See `.github/workflows/test.yml` for details.
 - **[GETTING_STARTED_WITH_TESTS.md](GETTING_STARTED_WITH_TESTS.md)** - Quick start guide
 - **[TEST_SUMMARY.md](TEST_SUMMARY.md)** - Quick summary of test coverage
 
+## Performance Optimization
+
+Radio Calico includes a comprehensive performance optimization guide:
+
+**Current Baseline:**
+- Total Bundle Size: ~280-300 KB (uncompressed)
+- First Contentful Paint: ~1.5s
+- Lighthouse Score: ~75
+
+**Optimization Potential:**
+- 🚀 47% faster First Contentful Paint (1.5s → 0.8s)
+- 📦 40% smaller bundle size (300 KB → 180 KB)
+- ⚡ +20 points Lighthouse score (75 → 95+)
+
+**Quick Wins (1-2 hours for 30-40% improvement):**
+1. Optimize logo image (save 44 KB)
+2. Add defer to scripts
+3. Lazy load images
+4. Add resource hints
+5. Update cache headers
+
+See **[PERFORMANCE_OPTIMIZATION.md](PERFORMANCE_OPTIMIZATION.md)** for:
+- Detailed performance analysis
+- 11 optimization strategies with code examples
+- Step-by-step implementation guides
+- Before/after performance metrics
+
+## Security
+
+Comprehensive security measures:
+
+**Automated Checks:**
+- ✅ npm audit for dependency vulnerabilities
+- ✅ Hardcoded secrets detection
+- ✅ SQL injection pattern checking
+- ✅ Default password detection
+- ✅ nginx security headers validation
+- ✅ Docker security configuration
+- ✅ Trivy container scanning
+- ✅ GitHub Security tab integration
+
+**Run Security Scans:**
+```bash
+make security         # Comprehensive security check
+make security-quick   # Quick npm audit
+make audit-fix        # Auto-fix vulnerabilities
+```
+
+## Docker Support
+
+Full Docker and Docker Compose support with:
+
+- **Development Mode**: Hot-reloading, volume mounts, debugging
+- **Production Mode**: Multi-stage builds, nginx reverse proxy, optimized
+- **Database**: PostgreSQL 16 with persistent volumes
+- **Health Checks**: Automatic container health monitoring
+- **Backups**: Database backup scripts
+
+**Quick Commands:**
+```bash
+make dev              # Start development environment
+make prod             # Start production environment
+make test             # Run tests
+make security         # Run security scans
+make logs-dev         # View development logs
+make logs-prod        # View production logs
+make backup           # Backup production database
+make clean            # Clean up containers
+```
+
+See **[DOCKER.md](DOCKER.md)** for complete documentation.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
 **Before submitting:**
-1. Run `npm test` to ensure all tests pass
-2. Add tests for new features
-3. Update documentation as needed
+1. Run `npm test` to ensure all 23 tests pass
+2. Run `make security` to check for vulnerabilities
+3. Add tests for new features
+4. Update documentation as needed
+5. Follow the existing code style
+
+**Development Workflow:**
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Run tests and security checks
+5. Commit your changes (`git commit -m 'Add amazing feature'`)
+6. Push to the branch (`git push origin feature/amazing-feature`)
+7. Open a Pull Request
 
 ## License
 
@@ -299,3 +432,10 @@ ISC
 ## Author
 
 millerw8
+
+## Acknowledgments
+
+- Built with [Claude Code](https://claude.com/claude-code)
+- HLS streaming powered by [hls.js](https://github.com/video-dev/hls.js/)
+- Testing with [Jest](https://jestjs.io/)
+- Security scanning with [Trivy](https://trivy.dev/)
