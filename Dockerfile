@@ -62,9 +62,8 @@ RUN apk add --no-cache nodejs npm
 # Copy nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
 
-# Copy static files to nginx html directory
+# Copy static files to nginx html directory (public has the full-featured app)
 COPY public /usr/share/nginx/html
-COPY index.html /usr/share/nginx/html/
 
 # Create app directory for backend
 WORKDIR /app
