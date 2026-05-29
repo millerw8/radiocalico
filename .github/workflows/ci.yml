@@ -158,6 +158,75 @@ jobs:
         fi
       continue-on-error: true
 
+    # Check for .env file in repository
+    - name: Check .env file in repository
+      run: |
+        echo "Checking if .env file is tracked in git..."
+        if git ls-files | grep -q '^\.env$'; then
+          echo "::error::.env file is tracked in git! Remove it immediately."
+          exit 1
+        else
+          echo ".env file not tracked in git ✓"
+        fi
+
+    # Check for default passwords in docker-compose
+    - name: Check default passwords
+      run: |
+        echo "Checking for default passwords in docker-compose files..."
+        if grep -E 'PASSWORD.*radiocalico' docker-compose*.yml 2>/dev/null | grep -v 'DB_PASSWORD:-'; then
+          echo "::warning::Default passwords found in docker-compose files. Change for production!"
+        else
+          echo "No default passwords in docker-compose ✓"
+        fi
+      continue-on-error: true
+
+    # Check nginx security headers
+    - name: Check nginx security headers
+      run: |
+        echo "Checking nginx security headers..."
+        MISSING_HEADERS=0
+        if [ -f nginx.conf ]; then
+          if ! grep -q 'X-Frame-Options' nginx.conf; then
+            echo "::warning::Missing X-Frame-Options header"
+            MISSING_HEADERS=1
+          fi
+          if ! grep -q 'X-Content-Type-Options' nginx.conf; then
+            echo "::warning::Missing X-Content-Type-Options header"
+            MISSING_HEADERS=1
+          fi
+          if ! grep -q 'X-XSS-Protection' nginx.conf; then
+            echo "::warning::Missing X-XSS-Protection header"
+            MISSING_HEADERS=1
+          fi
+          if [ $MISSING_HEADERS -eq 0 ]; then
+            echo "Security headers configured ✓"
+          fi
+        else
+          echo "nginx.conf not found - skipping check"
+        fi
+      continue-on-error: true
+
+    # Check Docker security
+    - name: Check Docker security
+      run: |
+        echo "Checking Docker security configuration..."
+        if grep -q 'USER node' Dockerfile 2>/dev/null; then
+          echo "Non-root user configured ✓"
+        else
+          echo "::warning::No non-root user found in Dockerfile"
+        fi
+      continue-on-error: true
+
+    # Check exposed ports
+    - name: Check exposed ports
+      run: |
+        echo "Checking exposed ports..."
+        if grep -E 'ports:.*5432' docker-compose.yml 2>/dev/null; then
+          echo "::notice::PostgreSQL port exposed on host (OK for development)"
+        fi
+        echo "Port configuration reviewed ✓"
+      continue-on-error: true
+
     # Trivy vulnerability scanner
     - name: Run Trivy filesystem scan
       uses: aquasecurity/trivy-action@master
