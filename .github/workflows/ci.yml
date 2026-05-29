@@ -1,0 +1,279 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run security scans daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  # Job 1: Run unit tests
+  test:
+    name: Unit Tests (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: radiocalico
+          POSTGRES_PASSWORD: radiocalico
+          POSTGRES_DB: radiocalico_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Setup test database
+      env:
+        DB_HOST: localhost
+        DB_PORT: 5432
+        DB_USER: radiocalico
+        DB_PASSWORD: radiocalico
+        DB_NAME: radiocalico_test
+      run: |
+        PGPASSWORD=radiocalico psql -h localhost -p 5432 -U radiocalico -d postgres -c "SELECT 1 FROM pg_database WHERE datname = 'radiocalico_test'" | grep -q 1 || \
+        PGPASSWORD=radiocalico psql -h localhost -p 5432 -U radiocalico -d postgres -c "CREATE DATABASE radiocalico_test"
+
+    - name: Run backend tests
+      env:
+        DB_HOST: localhost
+        DB_PORT: 5432
+        DB_USER: radiocalico
+        DB_PASSWORD: radiocalico
+        DB_NAME: radiocalico_test
+        NODE_ENV: test
+      run: npm run test:backend
+
+    - name: Run frontend tests
+      run: npm run test:frontend
+
+    - name: Generate coverage report
+      env:
+        DB_HOST: localhost
+        DB_PORT: 5432
+        DB_USER: radiocalico
+        DB_PASSWORD: radiocalico
+        DB_NAME: radiocalico_test
+        NODE_ENV: test
+      run: npm run test:coverage
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v4
+      with:
+        files: ./coverage/coverage-final.json
+        flags: unittests
+        name: codecov-${{ matrix.node-version }}
+        token: ${{ secrets.CODECOV_TOKEN }}
+      continue-on-error: true
+
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ matrix.node-version }}
+        path: |
+          coverage/
+          test-results/
+        retention-days: 30
+
+  # Job 2: Security scanning
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    # NPM Audit
+    - name: Run npm audit
+      run: |
+        echo "Running npm audit..."
+        npm audit --audit-level=moderate --json > npm-audit.json || true
+        cat npm-audit.json
+      continue-on-error: true
+
+    - name: Upload npm audit results
+      uses: actions/upload-artifact@v4
+      with:
+        name: npm-audit-results
+        path: npm-audit.json
+        retention-days: 30
+
+    # Check for hardcoded secrets
+    - name: Check for hardcoded secrets
+      run: |
+        echo "Checking for hardcoded secrets..."
+        if grep -r -i -E '(password|secret|api_key|apikey|token|jwt).*=.*["\047][^"\047]+["\047]' src/ --exclude-dir=node_modules 2>/dev/null | grep -v -E '(PASSWORD|SECRET|TOKEN|API_KEY).*process\.env' | grep -v 'example'; then
+          echo "::warning::Potential hardcoded secrets found"
+          exit 1
+        else
+          echo "No hardcoded secrets found"
+        fi
+
+    # Check for SQL injection patterns
+    - name: Check for SQL injection patterns
+      run: |
+        echo "Checking for SQL injection patterns..."
+        if grep -r -E 'query\(.*\+.*\)|query\(.*\$\{.*\}.*\)' src/ --exclude-dir=node_modules 2>/dev/null; then
+          echo "::warning::Potential SQL injection patterns found"
+        else
+          echo "No SQL injection patterns found"
+        fi
+      continue-on-error: true
+
+    # Trivy vulnerability scanner
+    - name: Run Trivy filesystem scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-fs-results.sarif'
+        severity: 'HIGH,CRITICAL'
+      continue-on-error: true
+
+    - name: Upload Trivy filesystem results to GitHub Security
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-fs-results.sarif'
+        category: 'trivy-fs'
+      continue-on-error: true
+
+    # Docker image scanning (only on push to main/develop)
+    - name: Set up Docker Buildx
+      if: github.event_name == 'push'
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build Docker image for scanning
+      if: github.event_name == 'push'
+      run: |
+        docker build -t radiocalico:${{ github.sha }} -f Dockerfile .
+
+    - name: Run Trivy container scan
+      if: github.event_name == 'push'
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'radiocalico:${{ github.sha }}'
+        format: 'sarif'
+        output: 'trivy-container-results.sarif'
+        severity: 'HIGH,CRITICAL'
+      continue-on-error: true
+
+    - name: Upload Trivy container results to GitHub Security
+      if: github.event_name == 'push'
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: 'trivy-container-results.sarif'
+        category: 'trivy-container'
+      continue-on-error: true
+
+    # Generate security report
+    - name: Generate security summary
+      if: always()
+      run: |
+        echo "# Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## NPM Audit" >> $GITHUB_STEP_SUMMARY
+        if [ -f npm-audit.json ]; then
+          VULNERABILITIES=$(jq '.metadata.vulnerabilities | to_entries | map("\(.key): \(.value)") | join(", ")' npm-audit.json -r)
+          echo "Vulnerabilities: $VULNERABILITIES" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "No npm audit results" >> $GITHUB_STEP_SUMMARY
+        fi
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Trivy Scans" >> $GITHUB_STEP_SUMMARY
+        echo "Filesystem and container scans completed. Check Security tab for details." >> $GITHUB_STEP_SUMMARY
+
+  # Job 3: Docker build test (only on push)
+  docker-build:
+    name: Docker Build Test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    needs: [test, security]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build development image
+      run: |
+        docker compose build radiocalico-dev
+
+    - name: Build production image
+      run: |
+        docker compose build radiocalico-prod
+
+    - name: Test production image
+      run: |
+        docker compose up -d postgres-prod
+        sleep 5
+        docker compose up -d radiocalico-prod
+        sleep 10
+
+        # Check if container is running
+        docker compose ps radiocalico-prod
+
+        # Check logs for errors
+        docker compose logs radiocalico-prod
+
+        # Cleanup
+        docker compose down
+
+  # Job 4: Dependency review (PR only)
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Dependency Review
+      uses: actions/dependency-review-action@v4
+      with:
+        fail-on-severity: moderate
+        comment-summary-in-pr: true
