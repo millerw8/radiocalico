@@ -32,7 +32,8 @@ help:
 	@echo "  make logs         - Follow all logs"
 	@echo ""
 	@echo "Testing:"
-	@echo "  make test         - Run all tests"
+	@echo "  make test         - Run all tests (requires PostgreSQL)"
+	@echo "  make test-setup   - Setup test database"
 	@echo "  make test-watch   - Run tests in watch mode"
 	@echo "  make test-coverage - Run tests with coverage report"
 	@echo ""
@@ -132,9 +133,14 @@ logs:
 # Test targets
 test-run:
 	@echo "Running all tests..."
+	@echo "Note: Requires PostgreSQL running (make dev)"
 	@npm test
 	@echo ""
 	@echo "✅ Tests completed!"
+
+test-setup:
+	@echo "Setting up test database..."
+	@bash scripts/setup-test-db.sh
 
 test-watch:
 	@echo "Running tests in watch mode (Ctrl+C to exit)..."

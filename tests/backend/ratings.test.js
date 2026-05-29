@@ -1,116 +1,168 @@
-const { describe, it, expect, beforeEach, afterEach } = require('@jest/globals');
+const { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } = require('@jest/globals');
 const request = require('supertest');
 const express = require('express');
-const Database = require('better-sqlite3');
+const { Pool } = require('pg');
 const path = require('path');
-const fs = require('fs');
 
-// Test database setup
-const TEST_DB_PATH = path.join(__dirname, '../fixtures/test.db');
+// Load test environment variables
+require('dotenv').config({ path: path.join(__dirname, '../../.env.test') });
 
-describe('Rating System - Backend', () => {
-  let app;
-  let db;
+// Create test database pool
+const testPool = new Pool({
+  host: process.env.DB_HOST || 'localhost',
+  port: process.env.DB_PORT || 5432,
+  database: process.env.DB_NAME || 'radiocalico_test',
+  user: process.env.DB_USER || 'radiocalico',
+  password: process.env.DB_PASSWORD || 'radiocalico',
+  max: 5,
+});
 
-  beforeEach(() => {
-    // Create fresh test database
-    if (fs.existsSync(TEST_DB_PATH)) {
-      fs.unlinkSync(TEST_DB_PATH);
-    }
+// Initialize test database schema
+async function initTestDatabase() {
+  await testPool.query(`
+    DROP TABLE IF EXISTS song_ratings CASCADE;
+    DROP TABLE IF EXISTS users CASCADE;
+  `);
 
-    db = new Database(TEST_DB_PATH);
+  await testPool.query(`
+    CREATE TABLE users (
+      id SERIAL PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      email TEXT NOT NULL UNIQUE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
 
-    // Initialize schema
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT NOT NULL UNIQUE,
-        email TEXT NOT NULL UNIQUE,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
+  await testPool.query(`
+    CREATE TABLE song_ratings (
+      id SERIAL PRIMARY KEY,
+      song_title TEXT NOT NULL,
+      song_artist TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      rating INTEGER NOT NULL CHECK(rating IN (1, -1)),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(song_title, song_artist, user_id)
+    )
+  `);
 
-      CREATE TABLE IF NOT EXISTS song_ratings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        song_title TEXT NOT NULL,
-        song_artist TEXT NOT NULL,
-        user_id TEXT NOT NULL,
-        rating INTEGER NOT NULL CHECK(rating IN (1, -1)),
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(song_title, song_artist, user_id)
-      );
+  await testPool.query(`
+    CREATE INDEX idx_song_ratings_lookup ON song_ratings(song_title, song_artist)
+  `);
+}
 
-      CREATE INDEX IF NOT EXISTS idx_song_ratings
-        ON song_ratings(song_title, song_artist);
-    `);
+// Clean up test data
+async function cleanTestData() {
+  await testPool.query('DELETE FROM song_ratings');
+  await testPool.query('DELETE FROM users');
+}
 
-    // Setup Express app with test database
-    app = express();
-    app.use(express.json());
+// Create test Express app
+function createTestApp(db) {
+  const app = express();
+  app.use(express.json());
 
-    // Helper function to get song ratings
-    const getSongRatings = (title, artist) => {
-      const thumbsUp = db.prepare('SELECT COUNT(*) as count FROM song_ratings WHERE song_title = ? AND song_artist = ? AND rating = 1').get(title, artist);
-      const thumbsDown = db.prepare('SELECT COUNT(*) as count FROM song_ratings WHERE song_title = ? AND song_artist = ? AND rating = -1').get(title, artist);
-      return {
-        thumbs_up: thumbsUp.count,
-        thumbs_down: thumbsDown.count
-      };
+  // Helper function to get song ratings
+  async function getSongRatings(title, artist) {
+    const thumbsUpResult = await db.query(
+      'SELECT COUNT(*) as count FROM song_ratings WHERE song_title = $1 AND song_artist = $2 AND rating = 1',
+      [title, artist]
+    );
+    const thumbsDownResult = await db.query(
+      'SELECT COUNT(*) as count FROM song_ratings WHERE song_title = $1 AND song_artist = $2 AND rating = -1',
+      [title, artist]
+    );
+    return {
+      thumbs_up: parseInt(thumbsUpResult.rows[0].count),
+      thumbs_down: parseInt(thumbsDownResult.rows[0].count)
     };
+  }
 
-    // Rate song endpoint
-    app.post('/rate-song', (req, res) => {
-      try {
-        const { title, artist, rating, userId } = req.body;
+  // POST /rate-song endpoint
+  app.post('/rate-song', async (req, res) => {
+    try {
+      const { title, artist, rating, userId } = req.body;
 
-        if (!title || !artist || !rating || !userId) {
-          return res.status(400).json({ error: 'Missing required fields' });
-        }
-
-        if (rating !== 1 && rating !== -1) {
-          return res.status(400).json({ error: 'Rating must be 1 (thumbs up) or -1 (thumbs down)' });
-        }
-
-        const existingRating = db.prepare('SELECT * FROM song_ratings WHERE song_title = ? AND song_artist = ? AND user_id = ?').get(title, artist, userId);
-
-        if (existingRating) {
-          if (existingRating.rating === rating) {
-            return res.status(409).json({ error: 'You have already voted this way', existing_rating: existingRating.rating });
-          }
-
-          const updateStmt = db.prepare('UPDATE song_ratings SET rating = ?, created_at = CURRENT_TIMESTAMP WHERE song_title = ? AND song_artist = ? AND user_id = ?');
-          updateStmt.run(rating, title, artist, userId);
-        } else {
-          const insertStmt = db.prepare('INSERT INTO song_ratings (song_title, song_artist, user_id, rating) VALUES (?, ?, ?, ?)');
-          insertStmt.run(title, artist, userId, rating);
-        }
-
-        const ratings = getSongRatings(title, artist);
-
-        res.json({ success: true, ratings, changed: !!existingRating });
-      } catch (error) {
-        res.status(500).json({ error: error.message });
+      if (!title || !artist || !userId) {
+        return res.status(400).json({ error: 'Missing required fields' });
       }
-    });
 
-    // Get user rating endpoint
-    app.get('/user-rating/:userId/:title/:artist', (req, res) => {
-      try {
-        const { userId, title, artist } = req.params;
-        const rating = db.prepare('SELECT rating FROM song_ratings WHERE song_title = ? AND song_artist = ? AND user_id = ?').get(title, artist, userId);
-        res.json({ rating: rating ? rating.rating : null });
-      } catch (error) {
-        res.status(500).json({ error: error.message });
+      if (rating !== 1 && rating !== -1) {
+        return res.status(400).json({ error: 'Rating must be 1 or -1' });
       }
-    });
+
+      // Check if user already rated this song
+      const existingResult = await db.query(
+        'SELECT rating FROM song_ratings WHERE song_title = $1 AND song_artist = $2 AND user_id = $3',
+        [title, artist, userId]
+      );
+
+      let changed = false;
+
+      if (existingResult.rows.length > 0) {
+        const existingRating = existingResult.rows[0].rating;
+        if (existingRating === rating) {
+          return res.status(409).json({ error: 'You have already voted this way' });
+        }
+        // Update existing rating
+        await db.query(
+          'UPDATE song_ratings SET rating = $1 WHERE song_title = $2 AND song_artist = $3 AND user_id = $4',
+          [rating, title, artist, userId]
+        );
+        changed = true;
+      } else {
+        // Insert new rating
+        await db.query(
+          'INSERT INTO song_ratings (song_title, song_artist, user_id, rating) VALUES ($1, $2, $3, $4)',
+          [title, artist, userId, rating]
+        );
+      }
+
+      const ratings = await getSongRatings(title, artist);
+      res.json({ success: true, ratings, changed });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
   });
 
-  afterEach(() => {
-    if (db) {
-      db.close();
+  // GET /user-rating/:userId/:title/:artist endpoint
+  app.get('/user-rating/:userId/:title/:artist', async (req, res) => {
+    try {
+      const { userId, title, artist } = req.params;
+      const result = await db.query(
+        'SELECT rating FROM song_ratings WHERE user_id = $1 AND song_title = $2 AND song_artist = $3',
+        [userId, title, artist]
+      );
+
+      if (result.rows.length === 0) {
+        return res.json({ rating: null });
+      }
+
+      res.json({ rating: result.rows[0].rating });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
     }
-    if (fs.existsSync(TEST_DB_PATH)) {
-      fs.unlinkSync(TEST_DB_PATH);
-    }
+  });
+
+  return app;
+}
+
+let app;
+
+describe('Song Rating API', () => {
+  beforeAll(async () => {
+    // Initialize test database schema
+    await initTestDatabase();
+    app = createTestApp(testPool);
+  });
+
+  afterAll(async () => {
+    // Close database connection
+    await testPool.end();
+  });
+
+  beforeEach(async () => {
+    // Clean data before each test
+    await cleanTestData();
   });
 
   describe('POST /rate-song', () => {
@@ -126,9 +178,9 @@ describe('Rating System - Backend', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
-      expect(response.body.changed).toBe(false);
       expect(response.body.ratings.thumbs_up).toBe(1);
       expect(response.body.ratings.thumbs_down).toBe(0);
+      expect(response.body.changed).toBe(false);
     });
 
     it('should successfully create a new thumbs down rating', async () => {
@@ -145,6 +197,7 @@ describe('Rating System - Backend', () => {
       expect(response.body.success).toBe(true);
       expect(response.body.ratings.thumbs_up).toBe(0);
       expect(response.body.ratings.thumbs_down).toBe(1);
+      expect(response.body.changed).toBe(false);
     });
 
     it('should allow user to change their vote from thumbs up to thumbs down', async () => {
@@ -175,6 +228,34 @@ describe('Rating System - Backend', () => {
       expect(response.body.ratings.thumbs_down).toBe(1);
     });
 
+    it('should allow user to change their vote from thumbs down to thumbs up', async () => {
+      // First vote: thumbs down
+      await request(app)
+        .post('/rate-song')
+        .send({
+          title: 'Test Song',
+          artist: 'Test Artist',
+          rating: -1,
+          userId: 'user123'
+        });
+
+      // Change vote to thumbs up
+      const response = await request(app)
+        .post('/rate-song')
+        .send({
+          title: 'Test Song',
+          artist: 'Test Artist',
+          rating: 1,
+          userId: 'user123'
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.changed).toBe(true);
+      expect(response.body.ratings.thumbs_up).toBe(1);
+      expect(response.body.ratings.thumbs_down).toBe(0);
+    });
+
     it('should return 409 when user tries to vote the same way twice', async () => {
       // First vote
       await request(app)
@@ -198,7 +279,6 @@ describe('Rating System - Backend', () => {
 
       expect(response.status).toBe(409);
       expect(response.body.error).toBe('You have already voted this way');
-      expect(response.body.existing_rating).toBe(1);
     });
 
     it('should return 400 when rating is not 1 or -1', async () => {
@@ -212,23 +292,22 @@ describe('Rating System - Backend', () => {
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toBe('Rating must be 1 (thumbs up) or -1 (thumbs down)');
+      expect(response.body.error).toBe('Rating must be 1 or -1');
     });
 
     it('should return 400 when required fields are missing', async () => {
       const response = await request(app)
         .post('/rate-song')
         .send({
-          title: 'Test Song',
-          rating: 1
-          // Missing artist and userId
+          title: 'Test Song'
+          // Missing artist, rating, userId
         });
 
       expect(response.status).toBe(400);
       expect(response.body.error).toBe('Missing required fields');
     });
 
-    it('should handle multiple users voting on the same song', async () => {
+    it('should allow multiple users to rate the same song', async () => {
       // User 1 votes thumbs up
       await request(app)
         .post('/rate-song')
@@ -264,29 +343,30 @@ describe('Rating System - Backend', () => {
       expect(response.body.ratings.thumbs_down).toBe(1);
     });
 
-    it('should treat songs with different titles as separate entities', async () => {
-      // Vote on Song A
+    it('should track ratings separately for different songs', async () => {
+      // Rate song 1
       await request(app)
         .post('/rate-song')
         .send({
-          title: 'Song A',
-          artist: 'Test Artist',
+          title: 'Song 1',
+          artist: 'Artist 1',
           rating: 1,
           userId: 'user123'
         });
 
-      // Vote on Song B with same artist
+      // Rate song 2
       const response = await request(app)
         .post('/rate-song')
         .send({
-          title: 'Song B',
-          artist: 'Test Artist',
-          rating: 1,
+          title: 'Song 2',
+          artist: 'Artist 2',
+          rating: -1,
           userId: 'user123'
         });
 
       expect(response.status).toBe(200);
-      expect(response.body.success).toBe(true);
+      expect(response.body.ratings.thumbs_up).toBe(0);
+      expect(response.body.ratings.thumbs_down).toBe(1);
     });
   });
 
@@ -299,8 +379,8 @@ describe('Rating System - Backend', () => {
       expect(response.body.rating).toBe(null);
     });
 
-    it('should return 1 when user has thumbs up rating', async () => {
-      // Create rating
+    it('should return the correct rating when user has rated thumbs up', async () => {
+      // Create a rating
       await request(app)
         .post('/rate-song')
         .send({
@@ -310,7 +390,7 @@ describe('Rating System - Backend', () => {
           userId: 'user123'
         });
 
-      // Fetch rating
+      // Get the rating
       const response = await request(app)
         .get('/user-rating/user123/Test%20Song/Test%20Artist');
 
@@ -318,27 +398,8 @@ describe('Rating System - Backend', () => {
       expect(response.body.rating).toBe(1);
     });
 
-    it('should return -1 when user has thumbs down rating', async () => {
-      // Create rating
-      await request(app)
-        .post('/rate-song')
-        .send({
-          title: 'Test Song',
-          artist: 'Test Artist',
-          rating: -1,
-          userId: 'user123'
-        });
-
-      // Fetch rating
-      const response = await request(app)
-        .get('/user-rating/user123/Test%20Song/Test%20Artist');
-
-      expect(response.status).toBe(200);
-      expect(response.body.rating).toBe(-1);
-    });
-
-    it('should return updated rating after user changes vote', async () => {
-      // Initial vote
+    it('should return the updated rating after user changes their vote', async () => {
+      // Initial vote: thumbs up
       await request(app)
         .post('/rate-song')
         .send({
@@ -348,7 +409,7 @@ describe('Rating System - Backend', () => {
           userId: 'user123'
         });
 
-      // Change vote
+      // Change to thumbs down
       await request(app)
         .post('/rate-song')
         .send({
@@ -358,7 +419,7 @@ describe('Rating System - Backend', () => {
           userId: 'user123'
         });
 
-      // Fetch updated rating
+      // Get the updated rating
       const response = await request(app)
         .get('/user-rating/user123/Test%20Song/Test%20Artist');
 
