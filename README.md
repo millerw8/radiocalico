@@ -1,6 +1,8 @@
 # Radio Calico
 
 [![GitHub](https://img.shields.io/badge/GitHub-millerw8%2Fradiocalico-blue)](https://github.com/millerw8/radiocalico)
+[![Tests](https://img.shields.io/badge/tests-23%20passing-brightgreen)](TESTING.md)
+[![Test Coverage](https://img.shields.io/badge/coverage-comprehensive-brightgreen)](tests/README.md)
 
 A web-based internet radio streaming application that plays lossless HLS audio streams with real-time metadata display and song rating features.
 
@@ -14,12 +16,14 @@ A web-based internet radio streaming application that plays lossless HLS audio s
 - 👤 **User Management** - Create and manage listener accounts
 - 🕐 **Recently Played** - Track history of the last 5 songs
 - 🎨 **Brand Design** - Clean UI following Radio Calico style guidelines
+- ✅ **Comprehensive Testing** - 23 unit tests covering backend API and frontend UI
 
 ## Tech Stack
 
 - **Backend**: Node.js, Express 5.x, SQLite (better-sqlite3)
 - **Frontend**: Vanilla JavaScript, HLS.js for audio streaming
 - **Design**: Custom CSS with Montserrat & Open Sans fonts
+- **Testing**: Jest, Supertest, jsdom (23 tests, < 1s execution)
 
 ## Quick Start
 
@@ -50,6 +54,27 @@ The application will be available at `http://localhost:3000`
 # Start with auto-reload on file changes
 npm run dev
 ```
+
+### Testing
+
+```bash
+# Run all tests (23 tests: 12 backend + 11 frontend)
+npm test
+
+# Run tests in watch mode (auto-rerun on file changes)
+npm run test:watch
+
+# Run with coverage report
+npm run test:coverage
+
+# Run only backend tests
+npm run test:backend
+
+# Run only frontend tests
+npm run test:frontend
+```
+
+For detailed testing documentation, see [TESTING.md](TESTING.md).
 
 ## Configuration
 
@@ -86,12 +111,27 @@ DATABASE_PATH=./database/app.db
 │   ├── app.js              # All JavaScript logic (417 lines)
 │   ├── users.html          # User management interface
 │   └── logo.png            # Radio Calico logo
+├── tests/                  # Test suite (Jest + Supertest + jsdom)
+│   ├── backend/
+│   │   └── ratings.test.js # Backend API tests (12 tests)
+│   ├── frontend/
+│   │   ├── setup.js        # Frontend test environment setup
+│   │   └── ratings-ui.test.js # Frontend UI tests (11 tests)
+│   ├── fixtures/           # Test data and temporary test databases
+│   └── README.md           # Detailed testing documentation
+├── .github/
+│   └── workflows/
+│       └── test.yml        # CI/CD test automation
 ├── database/
 │   └── app.db              # SQLite database (auto-created)
 ├── index.html              # Simple standalone HLS player (root)
+├── jest.config.js          # Jest test framework configuration
 ├── package.json            # Node.js dependencies and scripts
 ├── .env                    # Environment configuration
 ├── CLAUDE.md               # Development guidance for Claude Code
+├── TESTING.md              # Testing framework overview
+├── TEST_SUMMARY.md         # Quick testing summary
+├── GETTING_STARTED_WITH_TESTS.md # Testing quick start guide
 ├── README.md               # This file
 └── RadioCalico_Style_Guide.txt  # Brand design system
 ```
@@ -164,9 +204,63 @@ Radio Calico follows a custom brand style guide with:
 
 For complete styling details, see `RadioCalico_Style_Guide.txt`.
 
+## Testing
+
+Radio Calico includes a comprehensive test suite with 23 unit tests:
+
+- **12 Backend Tests**: API endpoints, database operations, validation, multi-user scenarios
+- **11 Frontend Tests**: UI interactions, client-side validation, error handling, state management
+
+### Test Coverage
+
+**Backend Tests** (`tests/backend/ratings.test.js`):
+- ✅ POST /rate-song endpoint (create, update, validation)
+- ✅ GET /user-rating endpoint (retrieval, null handling)
+- ✅ Real SQLite database testing (not mocked)
+- ✅ Business logic and edge cases
+
+**Frontend Tests** (`tests/frontend/ratings-ui.test.js`):
+- ✅ rateSong function (validation, API calls, error handling)
+- ✅ Rating button UI state (active states, disabled states)
+- ✅ Mocked fetch, localStorage, and alert
+- ✅ Client-side validation and user feedback
+
+### Running Tests
+
+```bash
+npm test                  # Run all tests
+npm run test:watch        # Watch mode (auto-rerun on changes)
+npm run test:coverage     # Generate coverage report
+npm run test:backend      # Backend tests only
+npm run test:frontend     # Frontend tests only
+```
+
+**Test Execution**: All 23 tests run in < 1 second
+
+### CI/CD
+
+Tests run automatically via GitHub Actions:
+- On every push to `main` or `develop`
+- On every pull request
+- Against Node.js 18.x and 20.x
+
+See `.github/workflows/test.yml` for details.
+
+### Documentation
+
+- **[TESTING.md](TESTING.md)** - Comprehensive testing guide
+- **[tests/README.md](tests/README.md)** - Detailed documentation with examples
+- **[GETTING_STARTED_WITH_TESTS.md](GETTING_STARTED_WITH_TESTS.md)** - Quick start guide
+- **[TEST_SUMMARY.md](TEST_SUMMARY.md)** - Quick summary of test coverage
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+**Before submitting:**
+1. Run `npm test` to ensure all tests pass
+2. Add tests for new features
+3. Update documentation as needed
 
 ## License
 

@@ -23,12 +23,27 @@ Radio Calico is a web-based internet radio streaming application that plays loss
 │   ├── app.js              # All JavaScript logic (417 lines)
 │   ├── users.html          # User management interface
 │   └── logo.png            # Radio Calico logo
+├── tests/                  # Test suite (Jest + Supertest + jsdom)
+│   ├── backend/
+│   │   └── ratings.test.js # Backend API tests (12 tests)
+│   ├── frontend/
+│   │   ├── setup.js        # Frontend test environment setup
+│   │   └── ratings-ui.test.js # Frontend UI tests (11 tests)
+│   ├── fixtures/           # Test data and temporary test databases
+│   └── README.md           # Detailed testing documentation
+├── .github/
+│   └── workflows/
+│       └── test.yml        # CI/CD test automation
 ├── database/
 │   └── app.db              # SQLite database (auto-created)
 ├── index.html              # Simple standalone HLS player (root)
+├── jest.config.js          # Jest test framework configuration
 ├── package.json            # Node.js dependencies and scripts
 ├── .env                    # Environment configuration (PORT, DATABASE_PATH)
 ├── README.md               # Project documentation
+├── TESTING.md              # Testing framework overview
+├── TEST_SUMMARY.md         # Quick testing summary
+├── GETTING_STARTED_WITH_TESTS.md # Testing quick start guide
 ├── stream_URL.txt          # HLS stream URL reference
 ├── RadioCalico_Style_Guide.txt  # Design system colors and fonts
 ├── RadioCalicoLayout.png   # UI layout reference
@@ -86,6 +101,21 @@ npm start
 npm run dev
 
 # The server runs on http://localhost:3000
+
+# Run tests (23 tests: 12 backend + 11 frontend)
+npm test
+
+# Run tests in watch mode (auto-rerun on file changes)
+npm run test:watch
+
+# Run tests with coverage report
+npm run test:coverage
+
+# Run only backend tests
+npm run test:backend
+
+# Run only frontend tests
+npm run test:frontend
 ```
 
 ## API Endpoints
@@ -183,6 +213,56 @@ This modular structure makes the codebase easier to maintain, debug, and extend.
 - Edit `styles.css` for visual changes (colors, layout, spacing)
 - Edit `app.js` for functional changes (behavior, API calls, event handlers)
 
+## Testing Framework
+
+The project includes a comprehensive unit testing framework using Jest, Supertest, and jsdom.
+
+### Test Coverage
+- **23 tests total** (12 backend + 11 frontend)
+- **Execution time**: < 1 second
+- **Backend tests**: API endpoints, database operations, validation, multi-user scenarios
+- **Frontend tests**: UI interactions, client-side validation, error handling, state management
+
+### Test Structure
+- `tests/backend/ratings.test.js` - Backend API and database tests
+  - Tests POST /rate-song endpoint (create, update, validation)
+  - Tests GET /user-rating endpoint (retrieval, null handling)
+  - Uses real SQLite database (fresh per test)
+  - Validates business logic and edge cases
+
+- `tests/frontend/ratings-ui.test.js` - Frontend UI and interaction tests
+  - Tests rateSong function (validation, API calls, error handling)
+  - Tests rating button UI state (active states, disabled states)
+  - Uses mocked fetch, localStorage, and alert
+  - Tests client-side validation and user feedback
+
+### Running Tests
+```bash
+npm test                 # Run all tests
+npm run test:watch       # Watch mode (recommended for development)
+npm run test:coverage    # Generate coverage report
+npm run test:backend     # Backend tests only
+npm run test:frontend    # Frontend tests only
+```
+
+### Testing Documentation
+- **TESTING.md** - Comprehensive testing overview and guide
+- **tests/README.md** - Detailed documentation with examples
+- **GETTING_STARTED_WITH_TESTS.md** - Quick start guide
+- **TEST_SUMMARY.md** - Summary of test coverage
+
+### CI/CD Integration
+- GitHub Actions workflow at `.github/workflows/test.yml`
+- Runs on push to main/develop and on pull requests
+- Tests against Node.js 18.x and 20.x
+- Uploads coverage reports to Codecov
+
+### Test Dependencies
+- **jest** - Test framework
+- **@jest/globals** - Jest globals for ESM
+- **supertest** - HTTP endpoint testing
+- **jest-environment-jsdom** - DOM manipulation in tests
+
 ## Important Notes
 
 - The database is auto-created on first server start
@@ -191,3 +271,5 @@ This modular structure makes the codebase easier to maintain, debug, and extend.
 - Static files are served from the `public/` directory
 - The root `index.html` is a simpler standalone player; `public/index.html` is the full-featured version
 - All CSS and JavaScript are in separate files - avoid adding inline styles or scripts to HTML files
+- **Always run tests before committing**: `npm test` (all 23 tests should pass)
+- **Use watch mode during development**: `npm run test:watch` for auto-rerun on file changes
