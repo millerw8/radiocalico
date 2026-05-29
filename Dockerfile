@@ -52,3 +52,35 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 
 # Start the application
 CMD ["npm", "start"]
+
+# Nginx production stage (serves static files and proxies API)
+FROM nginx:alpine AS production-nginx
+
+# Install Node.js in nginx container for the backend
+RUN apk add --no-cache nodejs npm
+
+# Copy nginx configuration
+COPY nginx.conf /etc/nginx/nginx.conf
+
+# Copy static files to nginx html directory
+COPY public /usr/share/nginx/html
+COPY index.html /usr/share/nginx/html/
+
+# Create app directory for backend
+WORKDIR /app
+
+# Copy backend dependencies and source
+COPY --from=base /app/node_modules ./node_modules
+COPY package*.json ./
+COPY src ./src
+COPY .env* ./
+
+# Create startup script
+RUN echo '#!/bin/sh' > /start.sh && \
+    echo 'node /app/src/server.js &' >> /start.sh && \
+    echo 'nginx -g "daemon off;"' >> /start.sh && \
+    chmod +x /start.sh
+
+EXPOSE 80
+
+CMD ["/start.sh"]
