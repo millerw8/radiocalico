@@ -9,12 +9,14 @@ coverage
 tests/fixtures/test-*.db
 
 # Environment files
+.env
 .env.local
 .env.*.local
 
 # Git
 .git
 .gitignore
+.github
 
 # IDE
 .vscode
@@ -27,7 +29,7 @@ tests/fixtures/test-*.db
 .DS_Store
 Thumbs.db
 
-# Documentation
+# Documentation (except README)
 *.md
 !README.md
 RadioCalico_Style_Guide.txt
@@ -35,10 +37,19 @@ RadioCalicoLayout.png
 RadioCalicoLogoTM.png
 RadioCalicoStyle.zip
 
-# CI/CD
-.github
-
 # Database (will be created in container)
 database/*.db
 database/*.db-shm
 database/*.db-wal
+
+# Backups
+backups/
+*.tar.gz
+
+# Security reports
+audit-report*.json
+
+# Docker files
+Dockerfile*
+docker-compose*.yml
+.dockerignore

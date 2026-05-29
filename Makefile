@@ -37,8 +37,9 @@ help:
 	@echo "  make test-coverage - Run tests with coverage report"
 	@echo ""
 	@echo "Security:"
-	@echo "  make security     - Run security audit (npm audit)"
-	@echo "  make audit        - Alias for 'make security'"
+	@echo "  make security     - Run comprehensive security checks"
+	@echo "  make security-quick - Run quick npm audit only"
+	@echo "  make audit        - Alias for 'make security-quick'"
 	@echo "  make audit-fix    - Automatically fix security issues"
 	@echo "  make audit-report - Generate JSON security report"
 	@echo ""
@@ -161,14 +162,19 @@ test-docker-coverage:
 
 # Security targets
 security:
-	@echo "Running security audit..."
+	@echo "Running comprehensive security checks..."
+	@echo ""
+	@bash scripts/security-check.sh
+
+security-quick:
+	@echo "Running quick security audit (npm only)..."
 	@echo ""
 	@npm audit --audit-level=moderate || true
 	@echo ""
+	@echo "💡 Tip: Run 'make security' for comprehensive checks"
 	@echo "💡 Tip: Run 'make audit-fix' to automatically fix issues"
-	@echo "💡 Tip: Run 'make audit-report' to generate JSON report"
 
-audit: security
+audit: security-quick
 
 audit-fix:
 	@echo "Attempting to fix security vulnerabilities..."
